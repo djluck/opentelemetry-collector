@@ -100,7 +100,7 @@ func TestCondCancelledWaiterIsRemoved(t *testing.T) {
 	waitNRegistered(t, c, mu, 1)
 	cancel()
 
-	assert.ErrorIs(t, <-done, context.Canceled)
+	require.ErrorIs(t, <-done, context.Canceled)
 	mu.Lock()
 	assert.Empty(t, c.waiters)
 	mu.Unlock()
@@ -124,21 +124,18 @@ func TestCondSignalRacesCancel(t *testing.T) {
 		waitNRegistered(t, c, mu, 1)
 
 		var raceWG sync.WaitGroup
-		raceWG.Add(2)
-		go func() {
-			defer raceWG.Done()
+		raceWG.Go(func() {
 			mu.Lock()
 			c.Signal()
 			mu.Unlock()
-		}()
-		go func() {
-			defer raceWG.Done()
+		})
+		raceWG.Go(func() {
 			cancel()
-		}()
+		})
 		raceWG.Wait()
 
 		if err := <-done; err != nil {
-			assert.ErrorIs(t, err, context.Canceled)
+			require.ErrorIs(t, err, context.Canceled)
 		}
 		mu.Lock()
 		assert.Empty(t, c.waiters)
@@ -158,9 +155,7 @@ func TestCondNoDeadlockUnderLoad(t *testing.T) {
 
 	const numWaiters, numSignalers = 16, 8
 	for range numWaiters {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -173,12 +168,10 @@ func TestCondNoDeadlockUnderLoad(t *testing.T) {
 				mu.Unlock()
 				cancel()
 			}
-		}()
+		})
 	}
 	for i := range numSignalers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -193,7 +186,7 @@ func TestCondNoDeadlockUnderLoad(t *testing.T) {
 				}
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 
 	time.Sleep(3 * time.Second)
